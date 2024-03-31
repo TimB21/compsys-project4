@@ -272,9 +272,28 @@ bool worstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool pages(int id, int size) {
-	// TODO
-	return false;
-}
+    int requiredFrames = (size + FRAME_SIZE - 1) / FRAME_SIZE; // Calculate number of frames required
+	
+    // Iterate through memory to find available frames
+    int start = -1; // Variable to store the starting index of the contiguous block
+    int count = 0; // Counter for the number of contiguous blocks
+    for (int i = 0; i < MEM_SIZE; i++) {
+        if (memory[i] == 0) { // Found a free frame
+            if (start == -1) {
+                start = i; // Set the start index of the contiguous block
+            }
+            count++; // Increment the count of contiguous blocks
+            if (count == requiredFrames * FRAME_SIZE) { // If enough contiguous frames are found
+                fillMemory(start, id, requiredFrames * FRAME_SIZE); // Allocate frames to the process
+                return true; // Allocation successful
+            }
+        } else { // Reset start if contiguous empty slots
+            start = -1;
+            count = 0;
+        }
+    }
+    return false;
+} 
 
 // Track the number of compaction events
 int compactionEvents = 0;
