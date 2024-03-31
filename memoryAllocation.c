@@ -66,8 +66,33 @@ int processesVacated = 0;
  */
 void vacateProcess(int id) {
 	printf("vacate %d\n", id);
-	processesVacated++;
-	// TODO
+	processesVacated++; // Incremented processes vacated with each call to vacate process
+	
+	int maxProcessSize = 0;
+    int maxProcessStart = 0;
+    int currentProcessSize = 0;
+    int i;
+
+    for (i = 0; i < MEM_SIZE; i++) {
+        if (memory[i] == id) {
+            if (currentProcessSize == 0) {
+                maxProcessStart = i; // Update the start index of the current process
+            }
+            currentProcessSize++;
+        } else {
+            if (currentProcessSize > maxProcessSize) {
+                maxProcessSize = currentProcessSize;
+                maxProcessStart = i - currentProcessSize; // Update the start index of the largest process
+            }
+            currentProcessSize = 0;
+        }
+    }
+
+	int length = maxProcessSize + maxProcessStart;
+    // Set memory slots occupied by the largest process to 0
+    for (i = maxProcessStart; i < length; i++) {
+        memory[i] = 0;
+    }
 }
 
 /**
@@ -94,7 +119,28 @@ bool (*policy)(int,int);
  * @return true if allocation succeeds, false if it fails.
  */
 bool firstFit(int id, int size) {
-	// TODO
+	int start = -1; // Variable to store the starting index of the contiguous block
+	int count = 0; // Counter for the number of contigous blocks
+
+	// Iterate through the memory array to find the first available slot of memory 
+	int i;
+	for(i = 0; i < MEM_SIZE; i++){
+		if(memory[i] == 0){
+			if(start == -1){
+				start = i;
+			}
+			count++;
+			if(count == size) {
+				fillMemory(start, id, size);
+				return true;
+			}
+		}
+		else {
+			start = -1; // Reset start if contigous empty slots 
+			count = 0;
+		}
+	}
+
 	return false;
 }
 
@@ -106,8 +152,30 @@ bool firstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool nextFit(int id, int size) {
-	// TODO
-	return false;
+	static int lastChecked = 0; // Static variable to keep track of the index of last checked memory block
+	int start = -1; // Variable to store the starting index of the contiguous block
+	int count = 0; // Counter for the number of contigous blocks
+	int i = lastChecked;
+
+	while(count < MEM_SIZE) {
+		if(memory[i] == 0){ // Memory is empty at index i
+			if(start == -1){
+				start = i; // If slot is empty, it could be the spot to allocate memory
+			}
+			count++;
+			if(count == size){
+				fillMemory(start, id, size);
+				lastChecked = (i + 1) % MEM_SIZE;
+				return true;
+			}
+		}
+		else {
+			start = -1;
+			count = 0;
+		}
+		i = (i + 1) % MEM_SIZE; // Move to the next memory block, using modulo to wrap around
+	}
+	return false; // Allocation failed
 }
 
 /**
@@ -118,7 +186,36 @@ bool nextFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool bestFit(int id, int size) {
-	// TODO
+	int bestStart = -1; // Starting index of the best fit contigous region
+	int bestSize = MEM_SIZE + 1; // Stores the size of the region which fits the process size best
+	int start = -1; // Variable to store the starting index of the contiguous block
+	int count = 0; // Counter for the number of contigous blocks
+	
+	int i;
+	for(i = 0; i < MEM_SIZE; i++){
+		if(memory[i] == 0){
+			if(start == -1) {
+				start = i; 
+			}
+			count++;
+			if(count >= size) {
+				if(count < bestSize) {
+					bestStart = start;
+					bestSize = count;
+				}
+			}
+		}
+		else {
+			start = -1;
+			count = 0;
+		}
+	}
+
+	if(bestStart != -1){
+		fillMemory(bestStart, id, size);
+		return true;
+	}
+
 	return false;
 }
 
@@ -130,7 +227,36 @@ bool bestFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool worstFit(int id, int size) {
-	// TODO
+	int worstStart = -1; // Starting index of the best fit contigous region
+	int worstSize = -1; // Stores the size of the region which fits the process size best
+	int start = -1; // Variable to store the starting index of the contiguous block
+	int count = 0; // Counter for the number of contigous blocks
+	
+	int i;
+	for(i = 0; i < MEM_SIZE; i++){
+		if(memory[i] == 0){
+			if(start == -1) {
+				start = i; 
+			}
+			count++;
+			if(count >= size) {
+				if(count > worstSize) {
+					worstStart = start;
+					worstSize = count;
+				}
+			}
+		}
+		else {
+			start = -1;
+			count = 0;
+		}
+	}
+
+	if(worstStart != -1){
+		fillMemory(worstStart, id, size);
+		return true;
+	}
+
 	return false;
 }
 
@@ -159,7 +285,22 @@ int compactionEvents = 0;
  * need it.
  */
 void compaction() {
-	// TODO
+	int free = 0;
+	int i;
+	for(i = 0; i < MEM_SIZE; i++){
+		if(memory[i] != 0){
+			memory[free] = memory[i];
+		if(i != free) {
+			memory[i] = 0;
+		}
+		free++;
+		}
+	}
+	// Clear remaining memory blocks
+    for (int i = free; i < MEM_SIZE; i++) {
+        memory[i] = 0;
+    }
+	printf("Memory compacted \n");
 }
 
 // Used to track whether the paging policy was chosen, so compaction can be avoided
@@ -181,8 +322,45 @@ bool paging = false;
  * @param id process id being placed into memory in the allocated slots.
  * @param size number of blocks in the process being allocated.
  */
-void allocate(int id, int size) {
-	// TODO
+void allocate(int id, int size) { 
+	bool success = policy(id, size);
+	if(!success) {
+		if(!paging){ 
+			compaction();
+			success = policy(id, size);
+		}
+		if (!success) {  
+            int largestProcessId = -1;
+            int largestSize = -1;
+            int currentProcessId = -1;
+            int currentSize = 0;
+            for (int i = 0; i < MEM_SIZE; ++i) {
+                if (memory[i] != currentProcessId) {
+                    if (currentSize > largestSize) {
+                        largestSize = currentSize;
+                        largestProcessId = currentProcessId;
+                    }
+                    currentProcessId = memory[i];
+                    currentSize = 1;
+                } else {
+                    currentSize++;
+                }
+            }
+            if (currentSize > largestSize) {
+                largestSize = currentSize;
+                largestProcessId = currentProcessId;
+            }
+            if (largestProcessId != -1) {
+                vacateProcess(largestProcessId);
+                success = policy(id, size);
+                if (!success) {
+                    printf("Error: Cannot allocate memory for process %d\n", id);
+                }
+            } else {
+                printf("Error: No processes to vacate.\n");
+            }
+		} 
+	}
 }
 
 /**
