@@ -259,48 +259,37 @@ bool bestFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool worstFit(int id, int size) {
-	// starting index and size of worst fitting contiguous region
-	int worstStart = -1; 
-	int worstSize = MEM_SIZE + 1;
-	// starting index and size of the current process being accounted for in the loop
-	int start = -1; 
-	int count = 0; 
-	
-	// loops through the memory and takes into size the the empty regions of contiguous memory
+	int worstStart = -1; // Starting index of the best fit contigous region
+	int worstSize = -1; // Stores the size of the region which fits the process size best
+	int start = -1; // Variable to store the starting index of the contiguous block
+	int count = 0; // Counter for the number of contigous blocks
+
 	int i;
 	for(i = 0; i < MEM_SIZE; i++){
-		// if the current index of memory is empty
 		if(memory[i] == 0){
-			// we set the starting index to the current iteration index if we were not already counting contiguous spaces
 			if(start == -1) {
 				start = i; 
 			}
-			// increment the count while there are empty contiguous spaces
 			count++;
-			// if the count is large enough to hold the process
 			if(count >= size) {
-				// if the current count is greater then the worst size, the current count is a worse fit for the process
-				// so we update the worse start and worst size to the current start and size of ideal contiguous region 
 				if(count > worstSize) {
 					worstStart = start;
 					worstSize = count;
 				}
 			}
 		}
-		// if we enounter a process at the next iteration in memory, reset the contiguous block counter to 0 and the starting index to -1 
-		// to indicate that we have come accross allocated memory
 		else {
 			start = -1;
 			count = 0;
 		}
 	}
-	// if worst start has an index
+
 	if(worstStart != -1){
 		fillMemory(worstStart, id, size);
 		return true;
 	}
-	// if the code reaches this point, worst fit has failed
-	return false; 
+
+	return false;
 } 
 
 /**
