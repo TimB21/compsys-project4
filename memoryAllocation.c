@@ -76,11 +76,13 @@ void vacateProcess(int id) {
     int i;
 	// loop through all positions in memory
     for (i = 0; i < MEM_SIZE; i++) {
-		// if memory is 
+		// if the process at the current location in memory is holds the largest process
         if (memory[i] == id) {
+			// if this is the first time coming accross the largest process, set the starting index to the current iteration
             if (processSize == 0) {
-                processStart = i; // Update the start index of the current process
+                processStart = i; 
             }
+			// increment the process size each time we encounter the process during the loop
             processSize++;
         }
     }
@@ -205,36 +207,47 @@ bool nextFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool bestFit(int id, int size) {
-	int bestStart = -1; // Starting index of the best fit contigous region
-	int bestSize = MEM_SIZE + 1; // Stores the size of the region which fits the process size best
-	int start = -1; // Variable to store the starting index of the contiguous block
-	int count = 0; // Counter for the number of contigous blocks
+	// starting index and size of best fitting contiguous region
+	int bestStart = -1; 
+	int bestSize = MEM_SIZE + 1;
+	// starting index and size of the current process being accounted for in the loop
+	int start = -1; 
+	int count = 0; 
 	
+	// loops through the memory and takes into size the the empty regions of contiguous memory
 	int i;
 	for(i = 0; i < MEM_SIZE; i++){
+		// if the current index of memory is empty
 		if(memory[i] == 0){
+			// we set the starting index to the current iteration index if we were not already counting contiguous spaces
 			if(start == -1) {
 				start = i; 
 			}
+			// increment the count while there are empty contiguous spaces
 			count++;
+			// if the count is large enough to hold the process
 			if(count >= size) {
+				// if the current count is less then the best size, the current count is a better fit for the process
+				// so we update the best start and best size to the current start and size of ideal contiguous region 
 				if(count < bestSize) {
 					bestStart = start;
 					bestSize = count;
 				}
 			}
 		}
+		// if we enounter a process at the next iteration in memory, reset the contiguous block counter to 0 and the starting index to -1 
+		// to indicate that we have come accross allocated memory
 		else {
 			start = -1;
 			count = 0;
 		}
 	}
-
+	// if best start has an index
 	if(bestStart != -1){
 		fillMemory(bestStart, id, size);
 		return true;
 	}
-
+	// if the code reaches this point, best fit has failed
 	return false;
 }
 
@@ -246,38 +259,49 @@ bool bestFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool worstFit(int id, int size) {
-	int worstStart = -1; // Starting index of the best fit contigous region
-	int worstSize = -1; // Stores the size of the region which fits the process size best
-	int start = -1; // Variable to store the starting index of the contiguous block
-	int count = 0; // Counter for the number of contigous blocks
+	// starting index and size of worst fitting contiguous region
+	int worstStart = -1; 
+	int worstSize = MEM_SIZE + 1;
+	// starting index and size of the current process being accounted for in the loop
+	int start = -1; 
+	int count = 0; 
 	
+	// loops through the memory and takes into size the the empty regions of contiguous memory
 	int i;
 	for(i = 0; i < MEM_SIZE; i++){
+		// if the current index of memory is empty
 		if(memory[i] == 0){
+			// we set the starting index to the current iteration index if we were not already counting contiguous spaces
 			if(start == -1) {
 				start = i; 
 			}
+			// increment the count while there are empty contiguous spaces
 			count++;
+			// if the count is large enough to hold the process
 			if(count >= size) {
+				// if the current count is greater then the worst size, the current count is a worse fit for the process
+				// so we update the worse start and worst size to the current start and size of ideal contiguous region 
 				if(count > worstSize) {
 					worstStart = start;
 					worstSize = count;
 				}
 			}
 		}
+		// if we enounter a process at the next iteration in memory, reset the contiguous block counter to 0 and the starting index to -1 
+		// to indicate that we have come accross allocated memory
 		else {
 			start = -1;
 			count = 0;
 		}
 	}
-
+	// if worst start has an index
 	if(worstStart != -1){
 		fillMemory(worstStart, id, size);
 		return true;
 	}
-
-	return false;
-}
+	// if the code reaches this point, worst fit has failed
+	return false; 
+} 
 
 /**
  * Implements simple paging memory allocation.
@@ -291,7 +315,7 @@ bool worstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool pages(int id, int size) {
-    int requiredFrames = ceil(size / FRAME_SIZE); // Calculate number of frames required
+    int requiredFrames = (size + FRAME_SIZE - 1) / FRAME_SIZE; // Calculate number of frames required
 	
     // Iterate through memory to find available frames
     int start = -1; // Variable to store the starting index of the contiguous block
@@ -341,7 +365,6 @@ void compaction() {
 		}
 		count++;
 	}
-	// loop
 	printf("Memory compacted \n");
 }
 
@@ -370,18 +393,26 @@ void allocate(int id, int size) {
 	// checks if the process was successfully allocated
 	if(!success) {
 		if(!paging){ 
+			// checks the amount of free frames
+			// if there is not enough free frames, vacate a process
 			// perform compaction if it is not paging
 			compaction();
 			// check to see if allocation was successful
 			success = policy(id, size);
 		}
-		// if allocation was still not successful, 
-		if (!success) {  
+		// if allocation was still not successful and paging is not the policy
+		if (!success && !paging) {  
+			// create variables to keep track of the largest process id and how many spots in memory it takes up
             int largestProcessId = -1;
             int largestSize = -1;
+			// creates variables to keep track of the id and size of the current process being counted 
             int currentProcessId = -1;
             int currentSize = 0;
-            for (int i = 0; i < MEM_SIZE; ++i) {
+			// loops through the memory and counts the size of the largest process 
+			// won't take into account discontinous process 
+			// need to create global variables to keep track of the processes sizes as the loop progresses 
+            for (int i = 0; i < MEM_SIZE; ++i) { 
+				
                 if (memory[i] != currentProcessId) {
                     if (currentSize > largestSize) {
                         largestSize = currentSize;
@@ -398,8 +429,10 @@ void allocate(int id, int size) {
                 largestProcessId = currentProcessId;
             }
             if (largestProcessId != -1) {
+				// vacate largest process if the one has been found
                 vacateProcess(largestProcessId);
                 success = policy(id, size);
+				// continue to vacate processes until there success
                 if (!success) {
                     printf("Cannot allocate memory for process %d\n", id);
                 }
