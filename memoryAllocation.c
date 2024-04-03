@@ -152,8 +152,6 @@ bool firstFit(int id, int size) {
 	return false;
 }
 
-// variable to keep track of the last index of the last checked memory block
-static int lastChecked = 0; 
 
 /**
  * next-fit allocation according to specification above.
@@ -163,40 +161,50 @@ static int lastChecked = 0;
  * @return true if allocation succeeds, false if it fails.
  */
 bool nextFit(int id, int size) {
-	// variable to keep track of the starting index of the contiguous block
-	int start = -1; 
-	// counter for the number of contiguous blocks
-	int count = 0; 
-	// set i equal to last checked because we start at the last index which was checked
-	int i = lastChecked;
+    static int lastChecked = 0;
+    int start = -1;
+    int count = 0;
+    int i = lastChecked;
+    bool wrappedAround = false; // Flag to track if we have wrapped around the memory
 
-	// while the count doesn't exceed memory size
-	while(count < MEM_SIZE) {
-		// memory is empty at index i 
-		if(memory[i] == 0){ 
-			// if start has not been set, set start to the current value of i
-			if(start == -1){
-				start = i; // If slot is empty, it could be the spot to allocate memory
-			}
-			// increment count since the memory at the current index is empty
-			count++;
-			// if the current count is equal to the size of the process, we fill the memory and set last checked equal to the next position of memory
-			if(count == size){
-				fillMemory(start, id, size);
-				lastChecked = (i + 1) % MEM_SIZE;
-				return true;
-			}
-		}
-		else {
-			// if contiguous region is not big enough to allocate the process, reset the start and count variables
-			start = -1;
-			count = 0;
-		}
-		// moves to the next block of memory and wraps around if needed
-		i = (i + 1) % MEM_SIZE; 
-	}
-	// next fit allocation fails
-	return false; 
+    // Iterate through the memory array starting from lastChecked
+    while (i < MEM_SIZE) {
+        // If the memory at the current index is empty
+        if (memory[i] == 0) {
+            // If start has not yet been set, set it to the current index
+            if (start == -1) {
+                start = i;
+            }
+            // Increment count for each empty memory location
+            count++;
+            // If count equals the size of the process, we have enough space to insert the process
+            if (count == size) {
+                // Fill the memory with the process
+                fillMemory(start, id, size);
+                // Update lastChecked to the next position in memory
+                lastChecked = (i + 1) % MEM_SIZE;
+                return true;
+            }
+        } else {
+            // If the current contiguous region does not have enough space, reset start and count
+            start = -1;
+            count = 0;
+        }
+
+        // Move to the next block of memory and wrap around if needed
+        i = (i + 1) % MEM_SIZE;
+
+        // Check if we have searched the entire memory once
+        if (i == lastChecked) {
+            // If we haven't wrapped around yet, set lastChecked back to 0 and continue searching
+            if (!wrappedAround) {
+                lastChecked = 0;
+                wrappedAround = true;
+            } else {
+                return false;
+            }
+        }
+    }
 }
 
 /**
@@ -214,7 +222,7 @@ bool bestFit(int id, int size) {
 	int start = -1; 
 	int count = 0; 
 	
-	// loops through the memory and takes into size the the empty regions of contiguous memory
+	// loops through the memory and takes into account size the the empty regions of contiguous memory
 	int i;
 	for(i = 0; i < MEM_SIZE; i++){
 		// if the current index of memory is empty
@@ -258,20 +266,29 @@ bool bestFit(int id, int size) {
  * @param size number of blocks in the process being allocated.
  * @return true if allocation succeeds, false if it fails.
  */
-bool worstFit(int id, int size) {
-	int worstStart = -1; // Starting index of the best fit contigous region
-	int worstSize = -1; // Stores the size of the region which fits the process size best
-	int start = -1; // Variable to store the starting index of the contiguous block
-	int count = 0; // Counter for the number of contigous blocks
+bool worstFit(int id, int size) { 
+	// stores the starting index and size of the worst fit contiguous region
+	int worstStart = -1; 
+	int worstSize = -1; 
+	// stores the starting index and count of contiguous empty blocks
+	int start = -1; 
+	int count = 0; 
 
+	// loops through the memory and takes into size the the empty regions of contiguous memory
 	int i;
 	for(i = 0; i < MEM_SIZE; i++){
+		// if the memory location at the current iteration is empty
 		if(memory[i] == 0){
+			// if the start has not been set, set it at the first empty spot in memory
 			if(start == -1) {
 				start = i; 
 			}
+			// increment the count of contiguous blocks while the memory location at the current iteration is empty
 			count++;
+			// if the count fits the size of the policy
 			if(count >= size) {
+				// if the current count is greater then the worst size, the current count is a worse fit for the process
+				// so we update the worst start and worst size to the current start and size of ideal contiguous region  
 				if(count > worstSize) {
 					worstStart = start;
 					worstSize = count;
@@ -279,16 +296,18 @@ bool worstFit(int id, int size) {
 			}
 		}
 		else {
+			// reset the start and count if we find a memory location with a process being stored
 			start = -1;
 			count = 0;
 		}
 	}
-
+	// if we found an index for worst start, fill the memory starting at this index
 	if(worstStart != -1){
 		fillMemory(worstStart, id, size);
 		return true;
 	}
 
+	// if we did not find a location to insert the process, we return false as worst fit failed
 	return false;
 } 
 
@@ -390,7 +409,7 @@ void allocate(int id, int size) {
 			success = policy(id, size);
 		}
 		// if allocation was still not successful and paging is not the policy
-		if (!success && !paging) {  
+		if (!success) {  
 			// create variables to keep track of the largest process id and how many spots in memory it takes up
             int largestProcessId = -1;
             int largestSize = -1;
