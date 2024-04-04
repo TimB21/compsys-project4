@@ -161,13 +161,11 @@ bool firstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool nextFit(int id, int size) {
-	// store the last checked in a static integer because this updates to this variable will be accessible by the next call from next fit
-    static int lastChecked = 0;
 	// variables to store the starting index and the size of the contiguous empty blocks
     int start = -1;
     int count = 0;
 	// set the current iteration to the last checked value
-    int i = lastChecked;
+    int i = lastAllocationPoint;
 	// this flag is used to check if we have gone through the memory completely
 	// if this is true, we know that we have failed next fit
     bool wrappedAround = false; 
@@ -187,7 +185,7 @@ bool nextFit(int id, int size) {
                 // fill the memory with the process
                 fillMemory(start, id, size);
                 // update lastChecked to the next position in memory
-                lastChecked = (i + 1) % MEM_SIZE;
+                lastAllocationPoint = (i + 1) % MEM_SIZE;
                 return true;
             }
         } else {
@@ -200,11 +198,11 @@ bool nextFit(int id, int size) {
         i = (i + 1) % MEM_SIZE;
 
         // check if we have searched the entire memory once
-        if (i == lastChecked) {
+        if (i == lastAllocationPoint) {
             // if we haven't wrapped around yet, set lastChecked back to 0 and continue searching
             if (!wrappedAround) {
 				// set last checked to 0 to see if we can insert in the beginning of memory
-                lastChecked = 0;
+                lastAllocationPoint = 0;
 				// set wrapped around to true to ensure that we end the search next time i is equal to last checked
                 wrappedAround = true;
             } else {
@@ -225,10 +223,12 @@ bool nextFit(int id, int size) {
 bool bestFit(int id, int size) {
 	// starting index and size of best fitting contiguous region
 	int bestStart = -1; 
-	int bestSize = MEM_SIZE + 1;
+	int bestSize = -1;
 	// starting index and size of the current process being accounted for in the loop
 	int start = -1; 
 	int count = 0; 
+	int difference = 0;
+	int bestDifference = MEM_SIZE+1;
 	
 	// loops through the memory and takes into account size the the empty regions of contiguous memory
 	int i;
@@ -245,10 +245,11 @@ bool bestFit(int id, int size) {
 			if(count >= size) {
 				// if the current count is less then the best size, the current count is a better fit for the process
 				// so we update the best start and best size to the current start and size of ideal contiguous region 
-				if(count < bestSize) {
+				int difference = count - size;
+
+				if(difference < bestDifference)
 					bestStart = start;
 					bestSize = count;
-				}
 			}
 		}
 		// if we enounter a process at the next iteration in memory, reset the contiguous block counter to 0 and the starting index to -1 
@@ -277,7 +278,7 @@ bool bestFit(int id, int size) {
 bool worstFit(int id, int size) { 
 	// stores the starting index and size of the worst fit contiguous region
 	int worstStart = -1; 
-	int worstSize = -1; 
+	int worstSize =  -1; 
 	// stores the starting index and count of contiguous empty blocks
 	int start = -1; 
 	int count = 0; 
@@ -355,6 +356,11 @@ bool pages(int id, int size) {
             int availableBlocks = 1; 
 			// index for checking consecutive blocks
             int j = i + 1; 
+
+			 // Skip over regions where a process is already allocated
+            while (j < MEM_SIZE && memory[j] != 0) {
+                j++;
+            }
             
             // count consecutive free blocks
 			// this ensures that a free block ends up having enough available blocks to be counted as a free frame
