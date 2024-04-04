@@ -330,41 +330,53 @@ bool worstFit(int id, int size) {
  * @param size number of blocks in the process being allocated.
  * @return true if allocation succeeds, false if it fails.
  */
-bool pages(int id, int size) {
-    int requiredFrames = size / FRAME_SIZE; // Calculate number of frames required
-    int remainingBlocks = size % FRAME_SIZE; // Calculate the number of remaining blocks after required frames
+bool pages(int id, int size) { 
+	// calculates the number of frames required to fill the process
+    int requiredFrames = size / FRAME_SIZE; 
+	// calculate the number of remaining blocks after required frames 
+    int remainingBlocks = size % FRAME_SIZE; 
     
-    // Iterate through memory to find available frames
-    int framesToAllocate = requiredFrames; // Tracks the number of frames still needed
-    int i = 0; // Index for iterating through memory
+    // finds the number of frames to allocated based on the required frames
+	// this will serve as a counter for how many frames have been allocated 
+    int framesToAllocate = requiredFrames; 
 
+	// index to keep track of the iterations through memory
+    int i = 0; 
+	//iterate through memory while there are frames to allocate and the index has not exceeded the memory size
     while (framesToAllocate > 0 && i < MEM_SIZE) {
+		// if there is a free frame
         if (memory[i] == 0) { // Found a free frame 
 			// Check if the current index is not at the beginning of a frame
             if (i % FRAME_SIZE != 0) {
                 // Move to the beginning of the next frame
                 i += FRAME_SIZE - (i % FRAME_SIZE);
             }
-			
-            int availableBlocks = 1; // Tracks the number of consecutive free blocks
-            int j = i + 1; // Index for checking consecutive blocks
+			// tracks the number of consecutive available blocks
+            int availableBlocks = 1; 
+			// index for checking consecutive blocks
+            int j = i + 1; 
             
-            // Count consecutive free blocks
+            // count consecutive free blocks
+			// this ensures that a free block ends up having enough available blocks to be counted as a free frame
             while (j < MEM_SIZE && memory[j] == 0 && availableBlocks < FRAME_SIZE) {
                 availableBlocks++;
                 j++;
             }
             
+			// if the number of available contiguous blocks is equal to the frame size
             if (availableBlocks == FRAME_SIZE) {
-                // Allocate a frame to the process
+                // allocate a frame to the process
                 fillMemory(i, id, FRAME_SIZE);
+				// decrement how many frames the process needs to allocate
                 framesToAllocate--; 
-                i = j; // Move to the next available index after the allocated frame  
-
+				// move i to the next avialble index after allocating the process to the current frame
+                i = j; 
             } else {
-                i++; // Move to the next index if contiguous empty slots are not enough
+				// move to the next index if there are not enough contiguous blocks to form a frame
+                i++; 
             }
-        } else { // Move to the next index if current index is not empty
+        } else { 
+			// move to the next index if the current index is not free
             i++;
         }
     }
@@ -374,10 +386,11 @@ bool pages(int id, int size) {
         fillMemory(i, id, remainingBlocks);   
     }
     
+	// if there are not frames left to allocate, paging is successful
     if(framesToAllocate == 0) {
 		return true;
 	}
-	else{
+	else{ // if there are remaining frames to allocate, there is not enough free space so paging fails
 		return false;
 	}
 }
