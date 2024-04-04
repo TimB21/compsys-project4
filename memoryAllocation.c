@@ -1,4 +1,3 @@
-
 #include <string.h> // for strcmp
 #include <stdlib.h>  // for exit
 #include <stdio.h>   // For IO
@@ -161,11 +160,13 @@ bool firstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool nextFit(int id, int size) {
+	// store the last checked in a static integer because this updates to this variable will be accessible by the next call from next fit
+    static int lastChecked = 0;
 	// variables to store the starting index and the size of the contiguous empty blocks
     int start = -1;
     int count = 0;
 	// set the current iteration to the last checked value
-    int i = lastAllocationPoint;
+    int i = lastChecked;
 	// this flag is used to check if we have gone through the memory completely
 	// if this is true, we know that we have failed next fit
     bool wrappedAround = false; 
@@ -185,7 +186,7 @@ bool nextFit(int id, int size) {
                 // fill the memory with the process
                 fillMemory(start, id, size);
                 // update lastChecked to the next position in memory
-                lastAllocationPoint = (i + 1) % MEM_SIZE;
+                lastChecked = (i + 1) % MEM_SIZE;
                 return true;
             }
         } else {
@@ -198,11 +199,11 @@ bool nextFit(int id, int size) {
         i = (i + 1) % MEM_SIZE;
 
         // check if we have searched the entire memory once
-        if (i == lastAllocationPoint) {
+        if (i == lastChecked) {
             // if we haven't wrapped around yet, set lastChecked back to 0 and continue searching
             if (!wrappedAround) {
 				// set last checked to 0 to see if we can insert in the beginning of memory
-                lastAllocationPoint = 0;
+                lastChecked = 0;
 				// set wrapped around to true to ensure that we end the search next time i is equal to last checked
                 wrappedAround = true;
             } else {
@@ -223,12 +224,10 @@ bool nextFit(int id, int size) {
 bool bestFit(int id, int size) {
 	// starting index and size of best fitting contiguous region
 	int bestStart = -1; 
-	int bestSize = -1;
+	int bestSize = MEM_SIZE + 1;
 	// starting index and size of the current process being accounted for in the loop
 	int start = -1; 
 	int count = 0; 
-	int difference = 0;
-	int bestDifference = MEM_SIZE+1;
 	
 	// loops through the memory and takes into account size the the empty regions of contiguous memory
 	int i;
@@ -245,11 +244,10 @@ bool bestFit(int id, int size) {
 			if(count >= size) {
 				// if the current count is less then the best size, the current count is a better fit for the process
 				// so we update the best start and best size to the current start and size of ideal contiguous region 
-				int difference = count - size;
-
-				if(difference < bestDifference)
+				if(count < bestSize) {
 					bestStart = start;
 					bestSize = count;
+				}
 			}
 		}
 		// if we enounter a process at the next iteration in memory, reset the contiguous block counter to 0 and the starting index to -1 
@@ -278,7 +276,7 @@ bool bestFit(int id, int size) {
 bool worstFit(int id, int size) { 
 	// stores the starting index and size of the worst fit contiguous region
 	int worstStart = -1; 
-	int worstSize =  -1; 
+	int worstSize = -1; 
 	// stores the starting index and count of contiguous empty blocks
 	int start = -1; 
 	int count = 0; 
@@ -331,58 +329,41 @@ bool worstFit(int id, int size) {
  * @param size number of blocks in the process being allocated.
  * @return true if allocation succeeds, false if it fails.
  */
-bool pages(int id, int size) { 
-	// calculates the number of frames required to fill the process
-    int requiredFrames = size / FRAME_SIZE; 
-	// calculate the number of remaining blocks after required frames 
-    int remainingBlocks = size % FRAME_SIZE; 
+bool pages(int id, int size) {
+    int requiredFrames = size / FRAME_SIZE; // Calculate number of frames required
+    int remainingBlocks = size % FRAME_SIZE; // Calculate the number of remaining blocks after required frames
     
-    // finds the number of frames to allocated based on the required frames
-	// this will serve as a counter for how many frames have been allocated 
-    int framesToAllocate = requiredFrames; 
+    // Iterate through memory to find available frames
+    int framesToAllocate = requiredFrames; // Tracks the number of frames still needed
+    int i = 0; // Index for iterating through memory
 
-	// index to keep track of the iterations through memory
-    int i = 0; 
-	//iterate through memory while there are frames to allocate and the index has not exceeded the memory size
     while (framesToAllocate > 0 && i < MEM_SIZE) {
-		// if there is a free frame
         if (memory[i] == 0) { // Found a free frame 
 			// Check if the current index is not at the beginning of a frame
             if (i % FRAME_SIZE != 0) {
                 // Move to the beginning of the next frame
                 i += FRAME_SIZE - (i % FRAME_SIZE);
             }
-			// tracks the number of consecutive available blocks
-            int availableBlocks = 1; 
-			// index for checking consecutive blocks
-            int j = i + 1; 
-
-			 // Skip over regions where a process is already allocated
-            while (j < MEM_SIZE && memory[j] != 0) {
-                j++;
-            }
+			
+            int availableBlocks = 1; // Tracks the number of consecutive free blocks
+            int j = i + 1; // Index for checking consecutive blocks
             
-            // count consecutive free blocks
-			// this ensures that a free block ends up having enough available blocks to be counted as a free frame
+            // Count consecutive free blocks
             while (j < MEM_SIZE && memory[j] == 0 && availableBlocks < FRAME_SIZE) {
                 availableBlocks++;
                 j++;
             }
             
-			// if the number of available contiguous blocks is equal to the frame size
             if (availableBlocks == FRAME_SIZE) {
-                // allocate a frame to the process
+                // Allocate a frame to the process
                 fillMemory(i, id, FRAME_SIZE);
-				// decrement how many frames the process needs to allocate
                 framesToAllocate--; 
-				// move i to the next avialble index after allocating the process to the current frame
-                i = j; 
+                i = j; // Move to the next available index after the allocated frame  
+
             } else {
-				// move to the next index if there are not enough contiguous blocks to form a frame
-                i++; 
+                i++; // Move to the next index if contiguous empty slots are not enough
             }
-        } else { 
-			// move to the next index if the current index is not free
+        } else { // Move to the next index if current index is not empty
             i++;
         }
     }
@@ -392,11 +373,10 @@ bool pages(int id, int size) {
         fillMemory(i, id, remainingBlocks);   
     }
     
-	// if there are not frames left to allocate, paging is successful
     if(framesToAllocate == 0) {
 		return true;
 	}
-	else{ // if there are remaining frames to allocate, there is not enough free space so paging fails
+	else{
 		return false;
 	}
 }
