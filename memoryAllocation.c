@@ -161,46 +161,54 @@ bool firstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool nextFit(int id, int size) {
+	// store the last checked in a static integer because this updates to this variable will be accessible by the next call from next fit
     static int lastChecked = 0;
+	// variables to store the starting index and the size of the contiguous empty blocks
     int start = -1;
     int count = 0;
+	// set the current iteration to the last checked value
     int i = lastChecked;
-    bool wrappedAround = false; // Flag to track if we have wrapped around the memory
+	// this flag is used to check if we have gone through the memory completely
+	// if this is true, we know that we have failed next fit
+    bool wrappedAround = false; 
 
-    // Iterate through the memory array starting from lastChecked
+    // iterate through the memory array starting from lastChecked
     while (i < MEM_SIZE) {
-        // If the memory at the current index is empty
+        // if the memory at the current index is empty
         if (memory[i] == 0) {
-            // If start has not yet been set, set it to the current index
+            // if start has not yet been set, set it to the current index
             if (start == -1) {
                 start = i;
             }
-            // Increment count for each empty memory location
+            // increment count for each empty memory location
             count++;
-            // If count equals the size of the process, we have enough space to insert the process
+            // if count equals the size of the process, we have enough space to insert the process
             if (count == size) {
-                // Fill the memory with the process
+                // fill the memory with the process
                 fillMemory(start, id, size);
-                // Update lastChecked to the next position in memory
+                // update lastChecked to the next position in memory
                 lastChecked = (i + 1) % MEM_SIZE;
                 return true;
             }
         } else {
-            // If the current contiguous region does not have enough space, reset start and count
+            // if the current contiguous region does not have enough space, reset start and count
             start = -1;
             count = 0;
         }
 
-        // Move to the next block of memory and wrap around if needed
+        // move to the next block of memory and wrap around if needed
         i = (i + 1) % MEM_SIZE;
 
-        // Check if we have searched the entire memory once
+        // check if we have searched the entire memory once
         if (i == lastChecked) {
-            // If we haven't wrapped around yet, set lastChecked back to 0 and continue searching
+            // if we haven't wrapped around yet, set lastChecked back to 0 and continue searching
             if (!wrappedAround) {
+				// set last checked to 0 to see if we can insert in the beginning of memory
                 lastChecked = 0;
+				// set wrapped around to true to ensure that we end the search next time i is equal to last checked
                 wrappedAround = true;
             } else {
+				// return false if we have already wrapped around and ensured that their are no contiguous regions which will fit the process
                 return false;
             }
         }
@@ -323,28 +331,60 @@ bool worstFit(int id, int size) {
  * @return true if allocation succeeds, false if it fails.
  */
 bool pages(int id, int size) {
-    int requiredFrames = (size + FRAME_SIZE - 1) / FRAME_SIZE; // Calculate number of frames required
-	
+    int requiredFrames = size / FRAME_SIZE; // Calculate number of frames required
+    int remainingBlocks = size % FRAME_SIZE; // Calculate the number of remaining blocks after required frames
+    
     // Iterate through memory to find available frames
-    int start = -1; // Variable to store the starting index of the contiguous block
-    int count = 0; // Counter for the number of contiguous blocks
-    for (int i = 0; i < MEM_SIZE; i++) {
-        if (memory[i] == 0) { // Found a free frame
-            if (start == -1) {
-                start = i; // Set the start index of the contiguous block
+    int framesToAllocate = requiredFrames; // Tracks the number of frames still needed
+    int i = 0; // Index for iterating through memory
+
+    while (framesToAllocate > 0 && i < MEM_SIZE) {
+        if (memory[i] == 0) { // Found a free frame 
+			// Check if the current index is not at the beginning of a frame
+            if (i % FRAME_SIZE != 0) {
+                // Move to the beginning of the next frame
+                i += FRAME_SIZE - (i % FRAME_SIZE);
             }
-            count++; // Increment the count of contiguous blocks
-            if (count == requiredFrames * FRAME_SIZE) { // If enough contiguous frames are found
-                fillMemory(start, id, requiredFrames * FRAME_SIZE); // Allocate frames to the process
-                return true; // Allocation successful
+			
+            int availableBlocks = 1; // Tracks the number of consecutive free blocks
+            int j = i + 1; // Index for checking consecutive blocks
+            
+            // Count consecutive free blocks
+            while (j < MEM_SIZE && memory[j] == 0 && availableBlocks < FRAME_SIZE) {
+                availableBlocks++;
+                j++;
             }
-        } else { // Reset start if contiguous empty slots
-            start = -1;
-            count = 0;
+            
+            if (availableBlocks == FRAME_SIZE) {
+                // Allocate a frame to the process
+                fillMemory(i, id, FRAME_SIZE);
+                framesToAllocate--; 
+                i = j; // Move to the next available index after the allocated frame  
+
+            } else {
+                i++; // Move to the next index if contiguous empty slots are not enough
+            }
+        } else { // Move to the next index if current index is not empty
+            i++;
         }
     }
-    return false;
-} 
+
+    // Allocate remaining blocks in the next frame if needed
+    if (remainingBlocks > 0 && i < MEM_SIZE) {
+        fillMemory(i, id, remainingBlocks);   
+    }
+    
+    if(framesToAllocate == 0) {
+		return true;
+	}
+	else{
+		return false;
+	}
+}
+
+
+
+
 
 // Track the number of compaction events
 int compactionEvents = 0;
@@ -398,18 +438,22 @@ bool paging = false;
 void allocate(int id, int size) { 
 	// checks to see if the policy was allocated successfully
 	bool success = policy(id, size);
-	// checks if the process was successfully allocated
-	if(!success) {
-		if(!paging){ 
-			// checks the amount of free frames
-			// if there is not enough free frames, vacate a process
-			// perform compaction if it is not paging
-			compaction();
-			// check to see if allocation was successful
-			success = policy(id, size);
+
+	if(!success && !paging) {
+		// checks if the process was successfully allocated
+		// counts the number of current allocated blocks of memory
+		int count = 0;
+		// loops through the memory blocks and counts the free spaces
+		int i;
+		for(i = 0; i < MEM_SIZE; i++){
+			if(memory[i] == 0){
+				count++;
+			}
 		}
-		// if allocation was still not successful and paging is not the policy
-		if (!success) {  
+		if(size <= count){
+			compaction();
+		}
+		else {
 			// create variables to keep track of the largest process id and how many spots in memory it takes up
             int largestProcessId = -1;
             int largestSize = -1;
@@ -420,7 +464,6 @@ void allocate(int id, int size) {
 			// won't take into account discontinous process 
 			// need to create global variables to keep track of the processes sizes as the loop progresses 
             for (int i = 0; i < MEM_SIZE; ++i) { 
-				
                 if (memory[i] != currentProcessId) {
                     if (currentSize > largestSize) {
                         largestSize = currentSize;
@@ -442,12 +485,59 @@ void allocate(int id, int size) {
                 success = policy(id, size);
 				// continue to vacate processes until there success
                 if (!success) {
+					// return allocate(id, size);
                     printf("Cannot allocate memory for process %d\n", id);
                 }
             } else {
                 printf("No processes to vacate.\n");
             }
 		} 
+
+		} else if (!success && paging) {
+			// Variables to keep track of the largest process id and its size
+			int largestProcessId = -1;
+			int largestSize = -1;
+
+			// Variables to keep track of the id and size of the current process being counted
+			int currentProcessId = -1;
+			int currentSize = 0;
+
+			// Loop through the memory to count the size of each process
+			for (int i = 0; i < MEM_SIZE; ++i) {
+				// if the memory at the current index hasn't been set to the current process id and the memory at the current index has a value
+				if (memory[i] != currentProcessId && memory[i] != 0) {
+					// Check if the current process is larger than the previously found largest process
+					if (currentSize > largestSize) {
+						largestSize = currentSize;
+						largestProcessId = currentProcessId;
+					}
+					// Update current process id and reset size for the new process
+					currentProcessId = memory[i];
+					currentSize = 1;
+				} else if (memory[i] != 0) {
+					// Increment size if the current memory block belongs to the same process
+					currentSize++;
+				}
+			}
+
+			// Check if the last process counted is the largest
+			if (currentSize > largestSize) {
+				largestSize = currentSize;
+				largestProcessId = currentProcessId;
+			}
+
+			if (largestProcessId != -1) {
+				// Vacate the largest process if one has been found
+				vacateProcess(largestProcessId);
+				// Attempt to allocate memory for the new process after vacating the largest one
+				success = policy(id, size);
+				// If allocation still fails, print an error message
+				if (!success) {
+					printf("Cannot allocate memory for process %d\n", id);
+				}
+			} else {
+				printf("No processes to vacate.\n");
+			}
 	}
 }
 
